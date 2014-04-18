@@ -1095,7 +1095,7 @@ int omap4460_mpu_dpll_set_rate(struct clk *clk, unsigned long rate)
 	 * DCC shouldn't be used at any frequency.
 	 */
 	dpll_rate = omap2_get_dpll_rate(clk->parent);
-	if (!cpu_is_omap447x() || rate <= OMAP_1GHz) {
+	if (!cpu_is_omap447x() || rate <= OMAP_1_2GHz) {
 		/* If DCC is enabled, disable it */
 		v = __raw_readl(dd->mult_div1_reg);
 		if (v & OMAP4460_DCC_EN_MASK) {
