@@ -182,7 +182,6 @@ static struct twl4030_usb_data omap4_usbphy_data = {
 	.phy_init	= omap4430_phy_init,
 	.phy_exit	= omap4430_phy_exit,
 	.phy_power	= omap4430_phy_power,
-	.phy_set_clock	= omap4430_phy_set_clk,
 	.phy_suspend	= omap4430_phy_suspend,
 };
 
@@ -422,7 +421,7 @@ static void omap4_audio_conf(void)
 {
 	/* twl6040 naudint */
 	omap_mux_init_signal("sys_nirq2.sys_nirq2", \
-		OMAP_PIN_INPUT_PULLUP);
+		OMAP_PIN_INPUT_PULLUP | OMAP_PIN_OFF_WAKEUPENABLE);
 }
 
 static struct twl4030_codec_audio_data twl6040_audio = {

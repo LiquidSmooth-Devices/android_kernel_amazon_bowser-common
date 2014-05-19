@@ -1374,10 +1374,6 @@ static void create_twl_proc_files(void)
 #ifdef CONFIG_PM
 static int twl_suspend(struct i2c_client *client, pm_message_t mesg)
 {
-#if defined(CONFIG_LAB126)
-	/* Un-mask low battery interrupt */
-	twl6030_interrupt_unmask(VLOW_INT_MASK, REG_INT_MSK_STS_A);
-#endif
 	return irq_set_irq_wake(client->irq, 1);
 }
 
@@ -1491,10 +1487,17 @@ twl_probe(struct i2c_client *client, const struct i2c_device_id *id)
 		/*
 		 * Check for the errata implementation
 		 * Errata ProDB00119490 present only in the TWL6032 ES1.1
+		 * Errata ProDB00112620 present only in the TWL6030 ES2.1
+		 * Errata ProDB00110684 present only in the TWL6030 ES2.1
 		 */
 		if (features & TWL6032_SUBCLASS) {
 			if (twlrev == 1)
 				errata |= TWL6032_ERRATA_DB00119490;
+		} else {
+			if (twlrev == 2) {
+				errata |= TWL6030_ERRATA_DB00112620;
+				errata |= TWL6030_ERRATA_DB00110684;
+			}
 		}
 	}
 

@@ -32,10 +32,6 @@
 #if defined(CONFIG_HAS_WAKELOCK)
 #include <linux/wakelock.h>
 #endif
-#ifdef CONFIG_LAB126
-#include <linux/metricslog.h>
-#define THERMO_METRICS_STR_LEN 128
-#endif
 
 #define SUMMIT_SMB347_I2C_ADDRESS	0x5F
 #define SUMMIT_SMB347_I2C_ADDRESS_SECONDARY	0x06
@@ -1720,10 +1716,6 @@ static int smb347_modify_charge_current(struct smb347_priv *priv,
 			value |= (precharge_current << 3);
 		}
 
-#ifdef CONFIG_MACH_OMAP4_BOWSER_SUBTYPE_JEM_FTM
-		value = 0xFF;	//FTM would set maximum charge current for VBAT_IN.
-#endif
-
 		if ((ret = smb347_i2c_write(priv->i2c_client,
 				SMB347_CHARGE_CURRENT, value))) {
 			dev_err(priv->dev,
@@ -1747,16 +1739,10 @@ static ssize_t smb347_charge_current_store(struct device *dev,
 
 	mutex_lock(&priv->lock);
 
-#ifndef CONFIG_MACH_OMAP4_BOWSER_SUBTYPE_JEM_FTM
 	if (value < 0) {
 		dev_err(priv->dev, "Invalid charge current %d mA\n", value);
 		goto done;
 	}
-#endif
-
-#ifdef CONFIG_MACH_OMAP4_BOWSER_SUBTYPE_JEM_FTM
-	smb347_modify_input_current(priv, value);
-#endif
 
 	if (value >= 1800 && priv->max_thermal_charge_current >= 1800) {
 		/* Adjust to 1800 mA */
@@ -1906,10 +1892,6 @@ static ssize_t smb347_charge_enable_store(struct device *dev,
 	int value = simple_strtoul(buf, NULL, 10);
 
 	mutex_lock(&priv->lock);
-
-#ifdef CONFIG_MACH_OMAP4_BOWSER_SUBTYPE_JEM_FTM
-	smb347_force_charging_setting(priv, 1);
-#endif
 
 	if (runin_stop_charge_check(priv, value)) {
 		value = 0;
@@ -2231,80 +2213,6 @@ done:
 static DEVICE_ATTR(charge_status, S_IRUGO,
 			smb347_charge_status_show, NULL);
 
-#ifdef CONFIG_MACH_OMAP4_BOWSER_SUBTYPE_JEM_FTM
-static ssize_t smb347_thermal_disable_show(struct device *dev,
-			struct device_attribute *attr, char *buf)
-{
-	struct smb347_priv *priv = i2c_get_clientdata(to_i2c_client(dev));
-	int disable = 0, ret = 0;
-	ssize_t len = 0;
-	u8 value = 0xff;
-
-	mutex_lock(&priv->lock);
-
-	ret = smb347_i2c_read(priv->i2c_client, SUMMIT_SMB347_THERMAL_CONTROL, &value);
-	if (ret < 0) {
-		disable = -1;
-		goto done;
-	}
-
-	if (value & (1 << 4))
-		disable = 1;
-
-done:
-	len += sprintf(buf + len, "%d\n", disable);
-	mutex_unlock(&priv->lock);
-	return len;
-}
-
-static ssize_t smb347_thermal_disable_store(struct device *dev,
-			struct device_attribute *attr, const char *buf, size_t len)
-{
-	struct smb347_priv *priv = i2c_get_clientdata(to_i2c_client(dev));
-	int value = simple_strtol(buf, NULL, 10);
-	int ret = 0;
-	u8 data = 0;
-
-	mutex_lock(&priv->lock);
-
-	ret = smb347_i2c_read(priv->i2c_client, SUMMIT_SMB347_THERMAL_CONTROL, &data);
-	if (ret < 0) {
-		dev_err(priv->dev, "Read Thermal_control failed (%d)\n", ret);
-		len = -1;
-		goto done;
-	}
-
-	if (value > 0) { //disable thermal
-		data |= (1 << 4);
-	} else { //enable
-		data &= ~(1 << 4);
-	}
-
-	if (smb347_config(priv, 1)) {
-		dev_err(priv->dev, "Enable writes to CONFIG regs failed\n");
-		len = -1;
-		goto done;
-	}
-
-	ret = smb347_i2c_write(priv->i2c_client, SUMMIT_SMB347_THERMAL_CONTROL, (u8)data);
-	if (ret < 0) {
-		dev_err(priv->dev, "Write Thermal_control failed (%d)\n", ret);
-		len = -1;
-	}
-
-	if (smb347_config(priv, 0)) {
-		dev_err(priv->dev, "Disable writes to CONFIG regs failed\n");
-		len = -1;
-	}
-done:
-	mutex_unlock(&priv->lock);
-	return len;
-}
-static DEVICE_ATTR(thermal_disable, S_IRUGO | S_IWUSR | S_IWGRP,
-			smb347_thermal_disable_show,
-			smb347_thermal_disable_store);
-#endif
-
 static struct attribute *smb347_attrs[] = {
 	&dev_attr_status_a.attr,
 	&dev_attr_status_b.attr,
@@ -2322,9 +2230,6 @@ static struct attribute *smb347_attrs[] = {
 	&dev_attr_complete_charge_timeout.attr,
 	&dev_attr_precharge_timeout.attr,
 	&dev_attr_charge_status.attr,
-#ifdef CONFIG_MACH_OMAP4_BOWSER_SUBTYPE_JEM_FTM
-	&dev_attr_thermal_disable.attr,
-#endif
 	NULL,
 };
 
@@ -2348,10 +2253,6 @@ static int smb347_apply_cooling(struct thermal_dev *dev,
 	unsigned char temp = 0xff;
 	int ret = -1;
 	static int previous_cooling_level = 0, new_cooling_level = 0;
-#ifdef CONFIG_LAB126
-	char *thermal_metric_prefix = "charger_cooling:def:monitor=1";
-	char buf[THERMO_METRICS_STR_LEN];
-#endif
 	/* transform into current limitation */
 	current_limit = thermal_cooling_device_reduction_get(dev, level);
 
@@ -2557,15 +2458,6 @@ static int smb347_apply_cooling(struct thermal_dev *dev,
 		THERMAL_INFO("max charge current transision from %d to %d",previous_max_charge_current,priv->max_thermal_charge_current); 
 	}
 
-#ifdef CONFIG_LAB126
-		if ( previous_cooling_level == 0 ) {
-			snprintf(buf,THERMO_METRICS_STR_LEN,"%s,throttling=%s:", thermal_metric_prefix, "start");
-			log_to_metrics(ANDROID_LOG_INFO, "ThermalEvent", buf);
-		} else if ( new_cooling_level == 0 ) {
-			snprintf(buf,THERMO_METRICS_STR_LEN,"%s,throttling=%s:", thermal_metric_prefix, "stop");
-			log_to_metrics(ANDROID_LOG_INFO, "ThermalEvent", buf);
-		}
-#endif
 	previous_cooling_level = new_cooling_level;
 
 	return 0;
