@@ -64,9 +64,6 @@ choice
 	config DEFAULT_CFQ
 		bool "CFQ" if IOSCHED_CFQ=y
 
-    config DEFAULT_VR
-        bool "V(R)" if IOSCHED_VR=y
-
 	config DEFAULT_FIOPS
 		bool "FIOPS" if IOSCHED_FIOPS=y
 
